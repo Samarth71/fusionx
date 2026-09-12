@@ -29,18 +29,25 @@
 
     <!-- ============ HERO / IDLE VIEW ============ -->
     <section class="hero" id="heroView">
-      <div class="pulse-rig" id="pulseRig" aria-hidden="true">
-        <span class="ring r1"></span>
-        <span class="ring r2"></span>
-        <span class="ring r3"></span>
-        <button class="connect-core" id="connectBtn" type="button">
+      <div class="hero-visual">
+        <div class="case-scene" id="caseScene" data-state="idle" aria-hidden="true">
+          <div class="case">
+            <div class="case-lid"></div>
+            <div class="case-body">
+              <div class="bud bud-left" id="budLeft"></div>
+              <div class="bud bud-right" id="budRight"></div>
+            </div>
+            <div class="case-led"></div>
+          </div>
+        </div>
+        <button class="connect-btn" id="connectBtn" type="button">
           <span class="connect-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M8 12a4 4 0 1 1 8 0v6a2 2 0 0 1-4 0v-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
               <path d="M12 4v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
             </svg>
           </span>
-          <span class="connect-label">Connect</span>
+          <span class="connect-label">Connect earbuds</span>
         </button>
       </div>
 
@@ -113,6 +120,35 @@
       <div class="panel services-panel">
         <div class="panel-label">Discovered services</div>
         <div class="services-grid" id="servicesGrid"></div>
+      </div>
+
+      <div class="panel controls-panel">
+        <div class="panel-label">Controls</div>
+
+        <div class="control-row">
+          <div class="control-text">
+            <div class="control-title">Find my earbuds</div>
+            <div class="control-caption" id="findCaption">Checking support…</div>
+          </div>
+          <button class="control-btn" id="findBtn" type="button" disabled>Buzz</button>
+        </div>
+
+        <div class="control-row">
+          <div class="control-text">
+            <div class="control-title">Alert if disconnected</div>
+            <div class="control-caption" id="linkLossCaption">Checking support…</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="linkLossToggle" disabled />
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </label>
+        </div>
+
+        <p class="controls-note">
+          These are the only interactive controls the Bluetooth LE standard exposes to a
+          browser. Touch gestures, ANC, and EQ are vendor-proprietary and unreachable from
+          the web on any device, including AirPods.
+        </p>
       </div>
 
     </section>
