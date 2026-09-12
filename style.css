@@ -128,71 +128,157 @@ body{
   padding: 48px 20px 20px;
 }
 
-.pulse-rig{
-  position: relative;
-  width: 220px;
-  height: 220px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 36px;
-}
-
-.ring{
-  position: absolute;
-  border-radius: 50%;
-  border: 1px solid var(--amber-dim);
-  inset: 0;
-}
-.ring.r1{ animation: ripple 3.2s var(--ease) infinite; }
-.ring.r2{ animation: ripple 3.2s var(--ease) infinite; animation-delay: 1.07s; }
-.ring.r3{ animation: ripple 3.2s var(--ease) infinite; animation-delay: 2.14s; }
-
-@keyframes ripple{
-  0%{ transform: scale(0.55); opacity: 0; }
-  15%{ opacity: .9; }
-  100%{ transform: scale(1); opacity: 0; }
-}
-
-@media (prefers-reduced-motion: reduce){
-  .ring{ animation: none !important; opacity: .35; }
-}
-
-.connect-core{
-  position: relative;
-  z-index: 1;
-  width: 128px;
-  height: 128px;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
-  color: var(--text-primary);
+.hero-visual{
   display: flex;
   flex-direction: column;
   align-items: center;
+  margin-bottom: 40px;
+}
+
+/* ---- 3D earbuds case ---- */
+.case-scene{
+  width: 220px;
+  height: 190px;
+  perspective: 900px;
+  display: flex;
+  align-items: center;
   justify-content: center;
-  gap: 6px;
+  margin-bottom: 8px;
+  animation: caseFloat 4.5s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce){ .case-scene{ animation: none; } }
+
+.case{
+  position: relative;
+  width: 132px;
+  height: 96px;
+  transform-style: preserve-3d;
+  transform: rotateX(8deg) rotateY(-18deg);
+}
+
+.case-body{
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 20px 20px 30px 30px;
+  background: linear-gradient(155deg, var(--surface-raised) 0%, #1a1d23 70%);
+  border: 1px solid var(--border);
+  box-shadow: 0 24px 40px -20px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.03);
+  overflow: hidden;
+}
+
+.case-lid{
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  top: -1px;
+  height: 46px;
+  border-radius: 20px 20px 10px 10px;
+  background: linear-gradient(155deg, #2c313a 0%, var(--surface-raised) 100%);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  transform-origin: top center;
+  transform: rotateX(0deg);
+  transition: transform .55s var(--ease);
+  z-index: 3;
+}
+
+.case-led{
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  transition: background .3s, box-shadow .3s;
+}
+
+.bud{
+  position: absolute;
+  width: 30px;
+  height: 40px;
+  top: 40px;
+  border-radius: 45% 45% 60% 60%;
+  background: linear-gradient(165deg, #cfd3d9, #9aa0aa);
+  box-shadow: inset 0 -3px 5px rgba(0,0,0,.25), 0 4px 10px rgba(0,0,0,.35);
+  transition: transform .6s var(--ease), box-shadow .4s var(--ease);
+}
+.bud-left{ left: 22px; transform: translateY(0) rotate(-6deg); }
+.bud-right{ right: 22px; transform: translateY(0) rotate(6deg); }
+
+@keyframes caseFloat{
+  0%, 100%{ transform: translateY(0); }
+  50%{ transform: translateY(-8px); }
+}
+
+/* connecting: lid opens, LED goes amber and pulses */
+.case-scene[data-state="connecting"] .case-lid{
+  transform: rotateX(-118deg) translateY(-4px);
+}
+.case-scene[data-state="connecting"] .case-led{
+  background: var(--amber);
+  box-shadow: 0 0 8px 2px var(--amber-dim);
+  animation: ledPulse 1s ease-in-out infinite;
+}
+.case-scene[data-state="connecting"] .bud{
+  box-shadow: inset 0 -3px 5px rgba(0,0,0,.25), 0 0 10px 2px var(--amber-dim);
+}
+
+/* connected: lid stays open, buds lift out of the case, LED turns cyan */
+.case-scene[data-state="connected"] .case-lid{
+  transform: rotateX(-118deg) translateY(-4px);
+}
+.case-scene[data-state="connected"] .case-led{
+  background: var(--cyan);
+  box-shadow: 0 0 8px 2px var(--cyan-dim);
+}
+.case-scene[data-state="connected"] .bud-left{
+  transform: translate(-14px, -34px) rotate(-14deg);
+  box-shadow: inset 0 -3px 5px rgba(0,0,0,.25), 0 0 12px 2px var(--cyan-dim);
+}
+.case-scene[data-state="connected"] .bud-right{
+  transform: translate(14px, -34px) rotate(14deg);
+  box-shadow: inset 0 -3px 5px rgba(0,0,0,.25), 0 0 12px 2px var(--cyan-dim);
+}
+
+@keyframes ledPulse{ 50%{ opacity: .35; } }
+@media (prefers-reduced-motion: reduce){
+  .case-lid, .bud, .case-led{ transition-duration: .01ms !important; }
+  .case-scene[data-state="connecting"] .case-led{ animation: none; }
+}
+
+/* ---- Connect button (pill) ---- */
+.connect-btn{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 24px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
+  color: var(--text-primary);
   cursor: pointer;
   transition: transform .18s var(--ease), border-color .18s var(--ease), box-shadow .18s var(--ease);
 }
-.connect-core:hover{
-  transform: scale(1.035);
+.connect-btn:hover{
+  transform: translateY(-1px);
   border-color: var(--amber-dim);
-  box-shadow: 0 0 0 1px var(--amber-dim), 0 12px 30px -12px rgba(232,163,61,.35);
+  box-shadow: 0 10px 24px -14px rgba(232,163,61,.4);
 }
-.connect-core:active{ transform: scale(0.98); }
-.connect-core:disabled{
+.connect-btn:active{ transform: translateY(0) scale(0.98); }
+.connect-btn:disabled{
   cursor: not-allowed;
   opacity: .5;
   transform: none;
   box-shadow: none;
 }
-.connect-icon{ width: 26px; height: 26px; color: var(--amber); }
+.connect-icon{ width: 18px; height: 18px; color: var(--amber); flex-shrink: 0; }
 .connect-icon svg{ width: 100%; height: 100%; }
 .connect-label{
   font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--text-secondary);
+  font-size: 13px;
   letter-spacing: .01em;
 }
 
@@ -398,6 +484,87 @@ body{
 }
 .service-chip[data-known="true"]{ border-color: var(--cyan-dim); }
 .service-chip[data-known="true"] .svc-name{ color: var(--cyan); }
+
+.controls-panel{ grid-column: 1 / -1; }
+
+.control-row{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.control-row:last-of-type{ border-bottom: none; }
+
+.control-title{ font-size: 13.5px; font-weight: 500; }
+.control-caption{ font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+
+.control-btn{
+  padding: 8px 18px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color .15s, transform .15s, opacity .15s;
+  flex-shrink: 0;
+}
+.control-btn:hover:not(:disabled){ border-color: var(--amber-dim); }
+.control-btn:active:not(:disabled){ transform: scale(0.96); }
+.control-btn:disabled{ opacity: .4; cursor: not-allowed; }
+
+.switch{
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.switch input{
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+.switch-track{
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  transition: background .2s, border-color .2s;
+}
+.switch-thumb{
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  transition: transform .2s var(--ease), background .2s;
+}
+.switch input:checked + .switch-track{
+  background: var(--cyan-dim);
+  border-color: var(--cyan);
+}
+.switch input:checked + .switch-track .switch-thumb{
+  transform: translateX(18px);
+  background: var(--cyan);
+}
+.switch input:disabled + .switch-track{ opacity: .4; cursor: not-allowed; }
+.switch input:focus-visible + .switch-track{ outline: 2px solid var(--amber); outline-offset: 2px; }
+
+.controls-note{
+  margin: 14px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-tertiary);
+}
 
 /* =========================================================
    Log panel
