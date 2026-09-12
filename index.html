@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ferusyx — Earbuds Console</title>
+<meta name="description" content="Connect real Bluetooth earbuds to your browser and see live battery, signal, and device data." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div class="app">
+
+  <header class="topbar">
+    <div class="wordmark">
+      <span class="wordmark-mark" aria-hidden="true"></span>
+      Ferusyx
+    </div>
+    <div class="status-pill" id="statusPill" data-state="idle">
+      <span class="status-dot" aria-hidden="true"></span>
+      <span id="statusText">Checking browser…</span>
+    </div>
+  </header>
+
+  <main class="stage">
+
+    <!-- ============ HERO / IDLE VIEW ============ -->
+    <section class="hero" id="heroView">
+      <div class="pulse-rig" id="pulseRig" aria-hidden="true">
+        <span class="ring r1"></span>
+        <span class="ring r2"></span>
+        <span class="ring r3"></span>
+        <button class="connect-core" id="connectBtn" type="button">
+          <span class="connect-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 12a4 4 0 1 1 8 0v6a2 2 0 0 1-4 0v-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              <path d="M12 4v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span class="connect-label">Connect</span>
+        </button>
+      </div>
+
+      <h1 class="hero-title">Pair your earbuds with the browser.</h1>
+      <p class="hero-sub">
+        Ferusyx talks to your earbuds over Web Bluetooth — the real radio link,
+        not a mock. It shows exactly what your device exposes: battery, identity,
+        and its discovered services. Nothing here is simulated.
+      </p>
+
+      <div class="req-row" id="reqRow">
+        <div class="req-chip" id="reqBrowser">
+          <span class="req-dot"></span> Chrome / Edge on desktop or Android
+        </div>
+        <div class="req-chip" id="reqHttps">
+          <span class="req-dot"></span> Secure connection (HTTPS)
+        </div>
+        <div class="req-chip" id="reqAdapter">
+          <span class="req-dot"></span> Bluetooth turned on
+        </div>
+      </div>
+
+      <p class="honesty-note">
+        Note on scope — Apple AirPods use a closed, encrypted protocol that no
+        website (or non-Apple app) can read. Ferusyx works with earbuds that
+        expose standard Bluetooth LE services — most budget and mid-range
+        earbuds do. If a feature isn't exposed by your hardware, Ferusyx will
+        say so instead of faking it.
+      </p>
+    </section>
+
+    <!-- ============ DASHBOARD / CONNECTED VIEW ============ -->
+    <section class="dashboard" id="dashboardView" hidden>
+
+      <div class="panel identity-panel">
+        <div class="identity-row">
+          <div class="identity-glyph" id="identityGlyph">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 12a4 4 0 1 1 8 0v6a2 2 0 0 1-4 0v-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              <path d="M12 4v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="identity-text">
+            <div class="identity-name" id="deviceName">—</div>
+            <div class="identity-id" id="deviceId">—</div>
+          </div>
+        </div>
+        <button class="disconnect-btn" id="disconnectBtn" type="button">Disconnect</button>
+      </div>
+
+      <div class="panel battery-panel">
+        <div class="panel-label">Battery</div>
+        <div class="battery-ring-wrap">
+          <svg viewBox="0 0 120 120" class="battery-ring" id="batteryRing">
+            <circle class="ring-track" cx="60" cy="60" r="52"/>
+            <circle class="ring-fill" id="ringFill" cx="60" cy="60" r="52"/>
+          </svg>
+          <div class="battery-readout" id="batteryReadout">—</div>
+        </div>
+        <div class="battery-caption" id="batteryCaption">Reading battery service…</div>
+      </div>
+
+      <div class="panel info-panel">
+        <div class="panel-label">Device information</div>
+        <dl class="info-list" id="infoList">
+          <!-- rows injected by script.js, only for fields the device actually returns -->
+        </dl>
+      </div>
+
+      <div class="panel services-panel">
+        <div class="panel-label">Discovered services</div>
+        <div class="services-grid" id="servicesGrid"></div>
+      </div>
+
+    </section>
+
+    <!-- ============ TERMINAL / EVENT LOG ============ -->
+    <aside class="log-panel" aria-label="Connection log">
+      <div class="log-header">
+        <span>Connection log</span>
+        <button class="log-clear" id="logClear" type="button">Clear</button>
+      </div>
+      <div class="log-body" id="logBody"></div>
+    </aside>
+
+  </main>
+
+  <footer class="footnote">
+    Web Bluetooth requires Chrome or Edge (desktop/Android) over HTTPS. Safari and iOS do not support it in any browser.
+  </footer>
+
+</div>
+
+<script src="script.js" defer></script>
+</body>
+</html>

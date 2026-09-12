@@ -1,0 +1,363 @@
+(() => {
+  'use strict';
+
+  /* =========================================================
+     Known GATT services / characteristics (canonical 128-bit UUIDs)
+     Anything not in this map is still shown, just labeled "Unknown".
+     ========================================================= */
+  const KNOWN_SERVICES = {
+    '00001800-0000-1000-8000-00805f9b34fb': 'Generic Access',
+    '00001801-0000-1000-8000-00805f9b34fb': 'Generic Attribute',
+    '0000180a-0000-1000-8000-00805f9b34fb': 'Device Information',
+    '0000180f-0000-1000-8000-00805f9b34fb': 'Battery Service',
+    '00001812-0000-1000-8000-00805f9b34fb': 'Human Interface Device',
+    '00001803-0000-1000-8000-00805f9b34fb': 'Link Loss',
+    '00001802-0000-1000-8000-00805f9b34fb': 'Immediate Alert',
+    '00001804-0000-1000-8000-00805f9b34fb': 'Tx Power',
+  };
+  const BATTERY_SERVICE = '0000180f-0000-1000-8000-00805f9b34fb';
+  const DEVICE_INFO_SERVICE = '0000180a-0000-1000-8000-00805f9b34fb';
+
+  const DEVICE_INFO_FIELDS = [
+    { name: 'manufacturer_name_string', label: 'Manufacturer' },
+    { name: 'model_number_string', label: 'Model' },
+    { name: 'serial_number_string', label: 'Serial number' },
+    { name: 'hardware_revision_string', label: 'Hardware rev.' },
+    { name: 'firmware_revision_string', label: 'Firmware rev.' },
+    { name: 'software_revision_string', label: 'Software rev.' },
+  ];
+
+  const RING_CIRCUMFERENCE = 2 * Math.PI * 52; // matches r=52 in the SVG
+
+  /* =========================================================
+     DOM refs
+     ========================================================= */
+  const $ = (id) => document.getElementById(id);
+
+  const statusPill = $('statusPill');
+  const statusText = $('statusText');
+  const connectBtn = $('connectBtn');
+  const disconnectBtn = $('disconnectBtn');
+  const heroView = $('heroView');
+  const dashboardView = $('dashboardView');
+  const reqBrowser = $('reqBrowser');
+  const reqHttps = $('reqHttps');
+  const reqAdapter = $('reqAdapter');
+  const deviceNameEl = $('deviceName');
+  const deviceIdEl = $('deviceId');
+  const ringFill = $('ringFill');
+  const batteryReadout = $('batteryReadout');
+  const batteryCaption = $('batteryCaption');
+  const infoList = $('infoList');
+  const servicesGrid = $('servicesGrid');
+  const logBody = $('logBody');
+  const logClear = $('logClear');
+
+  ringFill.style.strokeDasharray = String(RING_CIRCUMFERENCE);
+  ringFill.style.strokeDashoffset = String(RING_CIRCUMFERENCE);
+
+  let currentDevice = null;
+
+  /* =========================================================
+     Logging — a real, timestamped event trail
+     ========================================================= */
+  function log(message, kind = 'info') {
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    line.dataset.kind = kind;
+    const time = new Date().toLocaleTimeString([], { hour12: false });
+    line.innerHTML = `<span class="t">${time}</span>${escapeHtml(message)}`;
+    logBody.appendChild(line);
+    logBody.scrollTop = logBody.scrollHeight;
+    while (logBody.children.length > 200) {
+      logBody.removeChild(logBody.firstChild);
+    }
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  logClear.addEventListener('click', () => {
+    logBody.innerHTML = '';
+  });
+
+  /* =========================================================
+     Status pill
+     ========================================================= */
+  function setStatus(state, text) {
+    statusPill.dataset.state = state;
+    statusText.textContent = text;
+  }
+
+  function setReq(el, ok, labelOk, labelBad) {
+    el.dataset.ok = String(ok);
+    el.lastChild.textContent = ' ' + (ok ? labelOk : labelBad);
+  }
+
+  /* =========================================================
+     Startup — feature detect, no fake positivity
+     ========================================================= */
+  async function checkEnvironment() {
+    const hasApi = 'bluetooth' in navigator;
+    setReq(
+      reqBrowser, hasApi,
+      'Chrome / Edge detected',
+      'This browser does not support Web Bluetooth'
+    );
+
+    const isSecure = window.isSecureContext;
+    setReq(
+      reqHttps, isSecure,
+      'Secure connection confirmed',
+      'Not a secure context — HTTPS required'
+    );
+
+    if (hasApi && typeof navigator.bluetooth.getAvailability === 'function') {
+      try {
+        const available = await navigator.bluetooth.getAvailability();
+        setReq(
+          reqAdapter, available,
+          'Bluetooth adapter available',
+          'No Bluetooth adapter detected'
+        );
+      } catch {
+        setReq(reqAdapter, true, 'Bluetooth adapter available', 'Adapter status unknown');
+      }
+    } else {
+      reqAdapter.dataset.ok = 'unknown';
+      reqAdapter.lastChild.textContent = ' Adapter status confirmed at connect time';
+    }
+
+    if (!hasApi) {
+      setStatus('error', 'Web Bluetooth unsupported');
+      connectBtn.disabled = true;
+      log('Web Bluetooth is not available in this browser.', 'error');
+      log('Open this page in Chrome or Edge (desktop or Android) to continue.', 'warn');
+      return;
+    }
+
+    if (!isSecure) {
+      setStatus('error', 'Insecure context');
+      connectBtn.disabled = true;
+      log('Page is not running in a secure context. Web Bluetooth needs HTTPS.', 'error');
+      return;
+    }
+
+    setStatus('ready', 'Ready to pair');
+    log('Environment check passed. Ready to request a device.', 'ok');
+  }
+
+  /* =========================================================
+     Connect flow
+     ========================================================= */
+  connectBtn.addEventListener('click', requestDevice);
+  disconnectBtn.addEventListener('click', () => {
+    if (currentDevice && currentDevice.gatt.connected) {
+      log('Disconnect requested by user.');
+      currentDevice.gatt.disconnect();
+    }
+  });
+
+  async function requestDevice() {
+    connectBtn.disabled = true;
+    setStatus('connecting', 'Opening device chooser…');
+    log('Requesting device — pick your earbuds from the browser dialog.');
+
+    let device;
+    try {
+      device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: Object.keys(KNOWN_SERVICES),
+      });
+    } catch (err) {
+      connectBtn.disabled = false;
+      if (err.name === 'NotFoundError') {
+        setStatus('ready', 'Ready to pair');
+        log('No device selected.', 'warn');
+      } else {
+        setStatus('error', 'Chooser failed');
+        log(`Device chooser error: ${err.message}`, 'error');
+      }
+      return;
+    }
+
+    currentDevice = device;
+    log(`Device selected: ${device.name || '(unnamed device)'}`, 'ok');
+    device.addEventListener('gattserverdisconnected', handleDisconnected);
+
+    setStatus('connecting', 'Connecting to GATT server…');
+    try {
+      const server = await device.gatt.connect();
+      log('GATT server connected.', 'ok');
+      await onConnected(device, server);
+    } catch (err) {
+      connectBtn.disabled = false;
+      setStatus('error', 'Connection failed');
+      log(`Connection failed: ${err.message}`, 'error');
+    }
+  }
+
+  async function onConnected(device, server) {
+    setStatus('connected', device.name || 'Connected');
+    deviceNameEl.textContent = device.name || 'Unnamed device';
+    deviceIdEl.textContent = `Browser device ID · ${device.id}`;
+
+    heroView.hidden = true;
+    dashboardView.hidden = false;
+
+    resetBatteryUI();
+    infoList.innerHTML = '';
+    servicesGrid.innerHTML = '';
+
+    let services = [];
+    try {
+      services = await server.getPrimaryServices();
+    } catch (err) {
+      log(`Could not enumerate services: ${err.message}`, 'error');
+    }
+
+    log(`Discovered ${services.length} service${services.length === 1 ? '' : 's'}.`);
+    renderServiceChips(services);
+
+    const hasBattery = services.some((s) => s.uuid === BATTERY_SERVICE);
+    if (hasBattery) {
+      await wireBatteryService(server);
+    } else {
+      batteryCaption.textContent = "This device doesn't expose the standard Battery service.";
+    }
+
+    const hasDeviceInfo = services.some((s) => s.uuid === DEVICE_INFO_SERVICE);
+    if (hasDeviceInfo) {
+      await wireDeviceInfoService(server);
+    } else {
+      infoList.innerHTML = '<div class="info-empty">No Device Information service exposed by this device.</div>';
+    }
+  }
+
+  function renderServiceChips(services) {
+    if (!services.length) {
+      servicesGrid.innerHTML = '<div class="info-empty">No services could be read from this device.</div>';
+      return;
+    }
+    services.forEach((service) => {
+      const known = KNOWN_SERVICES[service.uuid];
+      const chip = document.createElement('div');
+      chip.className = 'service-chip';
+      chip.dataset.known = String(Boolean(known));
+      chip.innerHTML = `
+        <span class="svc-name">${known || 'Unknown service'}</span>
+        <span class="svc-uuid">${service.uuid}</span>
+      `;
+      servicesGrid.appendChild(chip);
+    });
+  }
+
+  /* =========================================================
+     Battery service — real read + live notifications
+     ========================================================= */
+  function resetBatteryUI() {
+    ringFill.style.stroke = 'var(--amber)';
+    ringFill.style.strokeDashoffset = String(RING_CIRCUMFERENCE);
+    batteryReadout.textContent = '—';
+    batteryCaption.textContent = 'Reading battery service…';
+  }
+
+  function setBatteryLevel(percent) {
+    const clamped = Math.max(0, Math.min(100, percent));
+    const offset = RING_CIRCUMFERENCE * (1 - clamped / 100);
+    ringFill.style.strokeDashoffset = String(offset);
+    ringFill.style.stroke = clamped <= 15 ? 'var(--danger)' : 'var(--amber)';
+    batteryReadout.textContent = `${clamped}%`;
+    batteryCaption.textContent = 'Live from the device\u2019s battery characteristic.';
+  }
+
+  async function wireBatteryService(server) {
+    try {
+      const service = await server.getPrimaryService('battery_service');
+      const characteristic = await service.getCharacteristic('battery_level');
+
+      const value = await characteristic.readValue();
+      setBatteryLevel(value.getUint8(0));
+      log(`Battery level read: ${value.getUint8(0)}%`, 'ok');
+
+      characteristic.addEventListener('characteristicvaluechanged', (event) => {
+        const level = event.target.value.getUint8(0);
+        setBatteryLevel(level);
+        log(`Battery update: ${level}%`);
+      });
+
+      try {
+        await characteristic.startNotifications();
+        log('Subscribed to live battery updates.', 'ok');
+      } catch {
+        log('Battery characteristic found, but live updates aren\u2019t supported — showing last read value.', 'warn');
+      }
+    } catch (err) {
+      batteryCaption.textContent = 'Battery service was listed but couldn\u2019t be read.';
+      log(`Battery read failed: ${err.message}`, 'warn');
+    }
+  }
+
+  /* =========================================================
+     Device information service — only render fields that exist
+     ========================================================= */
+  async function wireDeviceInfoService(server) {
+    let service;
+    try {
+      service = await server.getPrimaryService('device_information');
+    } catch (err) {
+      infoList.innerHTML = '<div class="info-empty">Device Information service was listed but couldn\u2019t be opened.</div>';
+      log(`Device info service failed: ${err.message}`, 'warn');
+      return;
+    }
+
+    const decoder = new TextDecoder('utf-8');
+    let foundAny = false;
+
+    for (const field of DEVICE_INFO_FIELDS) {
+      try {
+        const characteristic = await service.getCharacteristic(field.name);
+        const value = await characteristic.readValue();
+        const text = decoder.decode(value).replace(/\0/g, '').trim();
+        if (text) {
+          appendInfoRow(field.label, text);
+          foundAny = true;
+        }
+      } catch {
+        // This characteristic isn't implemented on this device — skip silently,
+        // it's normal for most devices to expose only a subset.
+      }
+    }
+
+    if (foundAny) {
+      log('Device identification strings loaded.', 'ok');
+    } else {
+      infoList.innerHTML = '<div class="info-empty">Service present, but no readable identification strings were returned.</div>';
+      log('Device Information service had no readable fields.', 'warn');
+    }
+  }
+
+  function appendInfoRow(label, value) {
+    const row = document.createElement('div');
+    row.className = 'info-row';
+    row.innerHTML = `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`;
+    infoList.appendChild(row);
+  }
+
+  /* =========================================================
+     Disconnection — return to hero, real state, no lingering data
+     ========================================================= */
+  function handleDisconnected() {
+    log('Device disconnected.', 'warn');
+    setStatus('ready', 'Ready to pair');
+    connectBtn.disabled = false;
+    dashboardView.hidden = true;
+    heroView.hidden = false;
+    currentDevice = null;
+  }
+
+  checkEnvironment();
+})();
