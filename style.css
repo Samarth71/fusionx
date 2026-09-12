@@ -1,473 +1,632 @@
-(() => {
-  'use strict';
+/* =========================================================
+   Ferusyx — tokens
+   ========================================================= */
+:root{
+  --bg: #14161a;
+  --surface: #1c1f25;
+  --surface-raised: #24282f;
+  --border: #333841;
+  --border-soft: #2a2e35;
 
-  /* =========================================================
-     Known GATT services / characteristics (canonical 128-bit UUIDs)
-     Anything not in this map is still shown, just labeled "Unknown".
-     ========================================================= */
-  const KNOWN_SERVICES = {
-    '00001800-0000-1000-8000-00805f9b34fb': 'Generic Access',
-    '00001801-0000-1000-8000-00805f9b34fb': 'Generic Attribute',
-    '0000180a-0000-1000-8000-00805f9b34fb': 'Device Information',
-    '0000180f-0000-1000-8000-00805f9b34fb': 'Battery Service',
-    '00001812-0000-1000-8000-00805f9b34fb': 'Human Interface Device',
-    '00001803-0000-1000-8000-00805f9b34fb': 'Link Loss',
-    '00001802-0000-1000-8000-00805f9b34fb': 'Immediate Alert',
-    '00001804-0000-1000-8000-00805f9b34fb': 'Tx Power',
-  };
-  const BATTERY_SERVICE = '0000180f-0000-1000-8000-00805f9b34fb';
-  const DEVICE_INFO_SERVICE = '0000180a-0000-1000-8000-00805f9b34fb';
-  const IMMEDIATE_ALERT_SERVICE = '00001802-0000-1000-8000-00805f9b34fb';
-  const LINK_LOSS_SERVICE = '00001803-0000-1000-8000-00805f9b34fb';
+  --text-primary: #edeef0;
+  --text-secondary: #9096a1;
+  --text-tertiary: #666c78;
 
-  const DEVICE_INFO_FIELDS = [
-    { name: 'manufacturer_name_string', label: 'Manufacturer' },
-    { name: 'model_number_string', label: 'Model' },
-    { name: 'serial_number_string', label: 'Serial number' },
-    { name: 'hardware_revision_string', label: 'Hardware rev.' },
-    { name: 'firmware_revision_string', label: 'Firmware rev.' },
-    { name: 'software_revision_string', label: 'Software rev.' },
-  ];
+  --amber: #e8a33d;
+  --amber-dim: #6b5527;
+  --cyan: #6fd6c9;
+  --cyan-dim: #2c4a45;
+  --danger: #e2604f;
 
-  const RING_CIRCUMFERENCE = 2 * Math.PI * 52; // matches r=52 in the SVG
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 
-  /* =========================================================
-     DOM refs
-     ========================================================= */
-  const $ = (id) => document.getElementById(id);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --ease: cubic-bezier(.22,.68,.36,1);
+}
 
-  const statusPill = $('statusPill');
-  const statusText = $('statusText');
-  const connectBtn = $('connectBtn');
-  const disconnectBtn = $('disconnectBtn');
-  const heroView = $('heroView');
-  const dashboardView = $('dashboardView');
-  const reqBrowser = $('reqBrowser');
-  const reqHttps = $('reqHttps');
-  const reqAdapter = $('reqAdapter');
-  const deviceNameEl = $('deviceName');
-  const deviceIdEl = $('deviceId');
-  const ringFill = $('ringFill');
-  const batteryReadout = $('batteryReadout');
-  const batteryCaption = $('batteryCaption');
-  const infoList = $('infoList');
-  const servicesGrid = $('servicesGrid');
-  const logBody = $('logBody');
-  const logClear = $('logClear');
-  const caseScene = $('caseScene');
-  const findBtn = $('findBtn');
-  const findCaption = $('findCaption');
-  const linkLossToggle = $('linkLossToggle');
-  const linkLossCaption = $('linkLossCaption');
+*{ box-sizing: border-box; }
+html, body{ height: 100%; }
+body{
+  margin: 0;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  -webkit-font-smoothing: antialiased;
+}
 
-  ringFill.style.strokeDasharray = String(RING_CIRCUMFERENCE);
-  ringFill.style.strokeDashoffset = String(RING_CIRCUMFERENCE);
+.app{
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 28px 24px 40px;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
 
-  let currentDevice = null;
-  let findAlertChar = null;
-  let linkLossChar = null;
+/* =========================================================
+   Topbar
+   ========================================================= */
+.topbar{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
 
-  function setCaseState(state) {
-    caseScene.dataset.state = state;
-  }
+.wordmark{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+.wordmark-mark{
+  width: 10px; height: 10px;
+  border-radius: 2px;
+  background: var(--amber);
+  transform: rotate(45deg);
+  flex-shrink: 0;
+}
 
-  /* =========================================================
-     Logging — a real, timestamped event trail
-     ========================================================= */
-  function log(message, kind = 'info') {
-    const line = document.createElement('div');
-    line.className = 'log-line';
-    line.dataset.kind = kind;
-    const time = new Date().toLocaleTimeString([], { hour12: false });
-    line.innerHTML = `<span class="t">${time}</span>${escapeHtml(message)}`;
-    logBody.appendChild(line);
-    logBody.scrollTop = logBody.scrollHeight;
-    while (logBody.children.length > 200) {
-      logBody.removeChild(logBody.firstChild);
-    }
-  }
+.status-pill{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+.status-dot{
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  flex-shrink: 0;
+}
+.status-pill[data-state="ready"] .status-dot{ background: var(--amber); }
+.status-pill[data-state="connecting"] .status-dot{
+  background: var(--amber);
+  animation: blink 1s ease-in-out infinite;
+}
+.status-pill[data-state="connected"] .status-dot{
+  background: var(--cyan);
+  box-shadow: 0 0 0 3px var(--cyan-dim);
+}
+.status-pill[data-state="error"] .status-dot{ background: var(--danger); }
 
-  function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  }
+@keyframes blink{ 50%{ opacity: .25; } }
 
-  logClear.addEventListener('click', () => {
-    logBody.innerHTML = '';
-  });
+/* =========================================================
+   Layout: stage splits main content + log panel
+   ========================================================= */
+.stage{
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 20px;
+  flex: 1;
+  margin-top: 22px;
+}
 
-  /* =========================================================
-     Status pill
-     ========================================================= */
-  function setStatus(state, text) {
-    statusPill.dataset.state = state;
-    statusText.textContent = text;
-  }
+@media (max-width: 880px){
+  .stage{ grid-template-columns: 1fr; }
+}
 
-  function setReq(el, ok, labelOk, labelBad) {
-    el.dataset.ok = String(ok);
-    el.lastChild.textContent = ' ' + (ok ? labelOk : labelBad);
-  }
+/* =========================================================
+   Hero / idle view
+   ========================================================= */
+.hero{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 48px 20px 20px;
+}
 
-  /* =========================================================
-     Startup — feature detect, no fake positivity
-     ========================================================= */
-  async function checkEnvironment() {
-    const hasApi = 'bluetooth' in navigator;
-    setReq(
-      reqBrowser, hasApi,
-      'Chrome / Edge detected',
-      'This browser does not support Web Bluetooth'
-    );
+.hero-visual{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 40px;
+}
 
-    const isSecure = window.isSecureContext;
-    setReq(
-      reqHttps, isSecure,
-      'Secure connection confirmed',
-      'Not a secure context — HTTPS required'
-    );
+/* ---- 3D earbuds case ---- */
+.case-scene{
+  width: 220px;
+  height: 190px;
+  perspective: 900px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+  animation: caseFloat 4.5s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce){ .case-scene{ animation: none; } }
 
-    if (hasApi && typeof navigator.bluetooth.getAvailability === 'function') {
-      try {
-        const available = await navigator.bluetooth.getAvailability();
-        setReq(
-          reqAdapter, available,
-          'Bluetooth adapter available',
-          'No Bluetooth adapter detected'
-        );
-      } catch {
-        setReq(reqAdapter, true, 'Bluetooth adapter available', 'Adapter status unknown');
-      }
-    } else {
-      reqAdapter.dataset.ok = 'unknown';
-      reqAdapter.lastChild.textContent = ' Adapter status confirmed at connect time';
-    }
+.case{
+  position: relative;
+  width: 132px;
+  height: 96px;
+  transform-style: preserve-3d;
+  transform: rotateX(8deg) rotateY(-18deg);
+}
 
-    if (!hasApi) {
-      setStatus('error', 'Web Bluetooth unsupported');
-      connectBtn.disabled = true;
-      log('Web Bluetooth is not available in this browser.', 'error');
-      log('Open this page in Chrome or Edge (desktop or Android) to continue.', 'warn');
-      return;
-    }
+.case-body{
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 20px 20px 30px 30px;
+  background: linear-gradient(155deg, var(--surface-raised) 0%, #1a1d23 70%);
+  border: 1px solid var(--border);
+  box-shadow: 0 24px 40px -20px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.03);
+  overflow: hidden;
+}
 
-    if (!isSecure) {
-      setStatus('error', 'Insecure context');
-      connectBtn.disabled = true;
-      log('Page is not running in a secure context. Web Bluetooth needs HTTPS.', 'error');
-      return;
-    }
+.case-lid{
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  top: -1px;
+  height: 46px;
+  border-radius: 20px 20px 10px 10px;
+  background: linear-gradient(155deg, #2c313a 0%, var(--surface-raised) 100%);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  transform-origin: top center;
+  transform: rotateX(0deg);
+  transition: transform .55s var(--ease);
+  z-index: 3;
+}
 
-    setStatus('ready', 'Ready to pair');
-    log('Environment check passed. Ready to request a device.', 'ok');
-  }
+.case-led{
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  transition: background .3s, box-shadow .3s;
+}
 
-  /* =========================================================
-     Connect flow
-     ========================================================= */
-  connectBtn.addEventListener('click', requestDevice);
-  disconnectBtn.addEventListener('click', () => {
-    if (currentDevice && currentDevice.gatt.connected) {
-      log('Disconnect requested by user.');
-      currentDevice.gatt.disconnect();
-    }
-  });
+.bud{
+  position: absolute;
+  width: 30px;
+  height: 40px;
+  top: 40px;
+  border-radius: 45% 45% 60% 60%;
+  background: linear-gradient(165deg, #cfd3d9, #9aa0aa);
+  box-shadow: inset 0 -3px 5px rgba(0,0,0,.25), 0 4px 10px rgba(0,0,0,.35);
+  transition: transform .6s var(--ease), box-shadow .4s var(--ease);
+}
+.bud-left{ left: 22px; transform: translateY(0) rotate(-6deg); }
+.bud-right{ right: 22px; transform: translateY(0) rotate(6deg); }
 
-  async function requestDevice() {
-    connectBtn.disabled = true;
-    setStatus('connecting', 'Opening device chooser…');
-    log('Requesting device — pick your earbuds from the browser dialog.');
+@keyframes caseFloat{
+  0%, 100%{ transform: translateY(0); }
+  50%{ transform: translateY(-8px); }
+}
 
-    let device;
-    try {
-      device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: Object.keys(KNOWN_SERVICES),
-      });
-    } catch (err) {
-      connectBtn.disabled = false;
-      if (err.name === 'NotFoundError') {
-        setStatus('ready', 'Ready to pair');
-        log('No device selected.', 'warn');
-      } else {
-        setStatus('error', 'Chooser failed');
-        log(`Device chooser error: ${err.message}`, 'error');
-      }
-      return;
-    }
+/* connecting: lid opens, LED goes amber and pulses */
+.case-scene[data-state="connecting"] .case-lid{
+  transform: rotateX(-118deg) translateY(-4px);
+}
+.case-scene[data-state="connecting"] .case-led{
+  background: var(--amber);
+  box-shadow: 0 0 8px 2px var(--amber-dim);
+  animation: ledPulse 1s ease-in-out infinite;
+}
+.case-scene[data-state="connecting"] .bud{
+  box-shadow: inset 0 -3px 5px rgba(0,0,0,.25), 0 0 10px 2px var(--amber-dim);
+}
 
-    currentDevice = device;
-    log(`Device selected: ${device.name || '(unnamed device)'}`, 'ok');
-    device.addEventListener('gattserverdisconnected', handleDisconnected);
+/* connected: lid stays open, buds lift out of the case, LED turns cyan */
+.case-scene[data-state="connected"] .case-lid{
+  transform: rotateX(-118deg) translateY(-4px);
+}
+.case-scene[data-state="connected"] .case-led{
+  background: var(--cyan);
+  box-shadow: 0 0 8px 2px var(--cyan-dim);
+}
+.case-scene[data-state="connected"] .bud-left{
+  transform: translate(-14px, -34px) rotate(-14deg);
+  box-shadow: inset 0 -3px 5px rgba(0,0,0,.25), 0 0 12px 2px var(--cyan-dim);
+}
+.case-scene[data-state="connected"] .bud-right{
+  transform: translate(14px, -34px) rotate(14deg);
+  box-shadow: inset 0 -3px 5px rgba(0,0,0,.25), 0 0 12px 2px var(--cyan-dim);
+}
 
-    setStatus('connecting', 'Connecting to GATT server…');
-    setCaseState('connecting');
-    try {
-      const server = await device.gatt.connect();
-      log('GATT server connected.', 'ok');
-      await onConnected(device, server);
-    } catch (err) {
-      connectBtn.disabled = false;
-      setCaseState('idle');
-      setStatus('error', 'Connection failed');
-      log(`Connection failed: ${err.message}`, 'error');
-    }
-  }
+@keyframes ledPulse{ 50%{ opacity: .35; } }
+@media (prefers-reduced-motion: reduce){
+  .case-lid, .bud, .case-led{ transition-duration: .01ms !important; }
+  .case-scene[data-state="connecting"] .case-led{ animation: none; }
+}
 
-  async function onConnected(device, server) {
-    setStatus('connected', device.name || 'Connected');
-    setCaseState('connected');
-    deviceNameEl.textContent = device.name || 'Unnamed device';
-    deviceIdEl.textContent = `Browser device ID · ${device.id}`;
+/* ---- Connect button (pill) ---- */
+.connect-btn{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 24px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--surface-raised), var(--surface));
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: transform .18s var(--ease), border-color .18s var(--ease), box-shadow .18s var(--ease);
+}
+.connect-btn:hover{
+  transform: translateY(-1px);
+  border-color: var(--amber-dim);
+  box-shadow: 0 10px 24px -14px rgba(232,163,61,.4);
+}
+.connect-btn:active{ transform: translateY(0) scale(0.98); }
+.connect-btn:disabled{
+  cursor: not-allowed;
+  opacity: .5;
+  transform: none;
+  box-shadow: none;
+}
+.connect-icon{ width: 18px; height: 18px; color: var(--amber); flex-shrink: 0; }
+.connect-icon svg{ width: 100%; height: 100%; }
+.connect-label{
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: .01em;
+}
 
-    resetBatteryUI();
-    resetControlsUI();
-    infoList.innerHTML = '';
-    servicesGrid.innerHTML = '';
+.hero-title{
+  font-size: clamp(22px, 3vw, 30px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  max-width: 480px;
+  margin: 0 0 12px;
+}
 
-    let services = [];
-    try {
-      services = await server.getPrimaryServices();
-    } catch (err) {
-      log(`Could not enumerate services: ${err.message}`, 'error');
-    }
+.hero-sub{
+  max-width: 480px;
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 0 0 28px;
+}
 
-    log(`Discovered ${services.length} service${services.length === 1 ? '' : 's'}.`);
-    renderServiceChips(services);
+.req-row{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 28px;
+}
+.req-chip{
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.req-dot{
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+.req-chip[data-ok="true"] .req-dot{ background: var(--cyan); }
+.req-chip[data-ok="false"] .req-dot{ background: var(--danger); }
 
-    const hasBattery = services.some((s) => s.uuid === BATTERY_SERVICE);
-    if (hasBattery) {
-      await wireBatteryService(server);
-    } else {
-      batteryCaption.textContent = "This device doesn't expose the standard Battery service.";
-    }
+.honesty-note{
+  max-width: 460px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-tertiary);
+  border-top: 1px solid var(--border-soft);
+  padding-top: 16px;
+}
 
-    const hasDeviceInfo = services.some((s) => s.uuid === DEVICE_INFO_SERVICE);
-    if (hasDeviceInfo) {
-      await wireDeviceInfoService(server);
-    } else {
-      infoList.innerHTML = '<div class="info-empty">No Device Information service exposed by this device.</div>';
-    }
+/* =========================================================
+   Dashboard / connected view
+   ========================================================= */
+.dashboard{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-content: start;
+  animation: rise .5s var(--ease) both;
+}
+@media (prefers-reduced-motion: reduce){ .dashboard{ animation: none; } }
 
-    await wireControls(services, server);
+@keyframes rise{
+  from{ opacity: 0; transform: translateY(10px); }
+  to{ opacity: 1; transform: translateY(0); }
+}
 
-    // Let the case-opening / buds-lifting animation finish before swapping views.
-    setTimeout(() => {
-      heroView.hidden = true;
-      dashboardView.hidden = false;
-    }, 700);
-  }
+.panel{
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 18px;
+}
 
-  /* =========================================================
-     Controls — Find My Earbuds + disconnect alert.
-     These are the only two standard BLE services that let a
-     browser trigger something physical on the device. Anything
-     else (ANC, EQ, touch remap) is vendor-proprietary and not
-     reachable from Web Bluetooth on any earbuds, AirPods included.
-     ========================================================= */
-  function resetControlsUI() {
-    findAlertChar = null;
-    linkLossChar = null;
-    findBtn.disabled = true;
-    findCaption.textContent = 'Checking support…';
-    linkLossToggle.disabled = true;
-    linkLossToggle.checked = false;
-    linkLossCaption.textContent = 'Checking support…';
-  }
+.panel-label{
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  margin-bottom: 14px;
+}
 
-  async function wireControls(services, server) {
-    const hasImmediateAlert = services.some((s) => s.uuid === IMMEDIATE_ALERT_SERVICE);
-    if (hasImmediateAlert) {
-      try {
-        const service = await server.getPrimaryService('immediate_alert');
-        findAlertChar = await service.getCharacteristic('alert_level');
-        findBtn.disabled = false;
-        findCaption.textContent = 'Supported — buzzes the device for a few seconds.';
-        log('Immediate Alert service ready.', 'ok');
-      } catch (err) {
-        findCaption.textContent = "Listed by the device but couldn't be opened.";
-        log(`Immediate Alert setup failed: ${err.message}`, 'warn');
-      }
-    } else {
-      findCaption.textContent = "This device doesn't expose the Find Me service.";
-    }
+.identity-panel{
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.identity-row{ display: flex; align-items: center; gap: 14px; }
+.identity-glyph{
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: var(--cyan-dim);
+  color: var(--cyan);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.identity-glyph svg{ width: 22px; height: 22px; }
+.identity-name{ font-weight: 600; font-size: 16px; }
+.identity-id{
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
 
-    const hasLinkLoss = services.some((s) => s.uuid === LINK_LOSS_SERVICE);
-    if (hasLinkLoss) {
-      try {
-        const service = await server.getPrimaryService('link_loss');
-        linkLossChar = await service.getCharacteristic('alert_level');
-        const value = await linkLossChar.readValue();
-        linkLossToggle.checked = value.getUint8(0) > 0;
-        linkLossToggle.disabled = false;
-        linkLossCaption.textContent = 'Supported — sounds an alert if the link drops unexpectedly.';
-        log('Link Loss service ready.', 'ok');
-      } catch (err) {
-        linkLossCaption.textContent = "Listed by the device but couldn't be opened.";
-        log(`Link Loss setup failed: ${err.message}`, 'warn');
-      }
-    } else {
-      linkLossCaption.textContent = "This device doesn't expose the Link Loss service.";
-    }
-  }
+.disconnect-btn{
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color .15s, color .15s;
+}
+.disconnect-btn:hover{ border-color: var(--danger); color: var(--danger); }
 
-  findBtn.addEventListener('click', async () => {
-    if (!findAlertChar) return;
-    findBtn.disabled = true;
-    try {
-      await findAlertChar.writeValue(Uint8Array.of(2));
-      log('Sent buzz command to earbuds.', 'ok');
-      setTimeout(async () => {
-        try {
-          await findAlertChar.writeValue(Uint8Array.of(0));
-        } catch {
-          // device may already be out of range or disconnected — nothing to do
-        }
-        if (findAlertChar) findBtn.disabled = false;
-      }, 3000);
-    } catch (err) {
-      log(`Buzz command failed: ${err.message}`, 'warn');
-      findBtn.disabled = false;
-    }
-  });
+.battery-ring-wrap{
+  position: relative;
+  width: 132px; height: 132px;
+  margin: 0 auto 14px;
+}
+.battery-ring{ width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring-track{
+  fill: none;
+  stroke: var(--border-soft);
+  stroke-width: 8;
+}
+.ring-fill{
+  fill: none;
+  stroke: var(--amber);
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 326.7;
+  stroke-dashoffset: 326.7;
+  transition: stroke-dashoffset .8s var(--ease), stroke .3s;
+}
+.battery-readout{
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 500;
+}
+.battery-caption{
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
 
-  linkLossToggle.addEventListener('change', async () => {
-    if (!linkLossChar) return;
-    const wantsOn = linkLossToggle.checked;
-    try {
-      await linkLossChar.writeValue(Uint8Array.of(wantsOn ? 2 : 0));
-      log(`Disconnect alert ${wantsOn ? 'enabled' : 'disabled'}.`, 'ok');
-    } catch (err) {
-      log(`Couldn't update disconnect alert: ${err.message}`, 'warn');
-      linkLossToggle.checked = !wantsOn;
-    }
-  });
+.info-list{
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.info-row{
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.info-row:last-child{ border-bottom: none; padding-bottom: 0; }
+.info-row dt{ color: var(--text-tertiary); }
+.info-row dd{ margin: 0; font-family: var(--font-mono); color: var(--text-primary); text-align: right; }
+.info-empty{ font-size: 13px; color: var(--text-tertiary); }
 
-  function renderServiceChips(services) {
-    if (!services.length) {
-      servicesGrid.innerHTML = '<div class="info-empty">No services could be read from this device.</div>';
-      return;
-    }
-    services.forEach((service) => {
-      const known = KNOWN_SERVICES[service.uuid];
-      const chip = document.createElement('div');
-      chip.className = 'service-chip';
-      chip.dataset.known = String(Boolean(known));
-      chip.innerHTML = `
-        <span class="svc-name">${known || 'Unknown service'}</span>
-        <span class="svc-uuid">${service.uuid}</span>
-      `;
-      servicesGrid.appendChild(chip);
-    });
-  }
+.services-panel{ grid-column: 1 / -1; }
+.services-grid{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.service-chip{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  min-width: 150px;
+}
+.service-chip .svc-name{ font-size: 12.5px; font-weight: 500; }
+.service-chip .svc-uuid{
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  word-break: break-all;
+}
+.service-chip[data-known="true"]{ border-color: var(--cyan-dim); }
+.service-chip[data-known="true"] .svc-name{ color: var(--cyan); }
 
-  /* =========================================================
-     Battery service — real read + live notifications
-     ========================================================= */
-  function resetBatteryUI() {
-    ringFill.style.stroke = 'var(--amber)';
-    ringFill.style.strokeDashoffset = String(RING_CIRCUMFERENCE);
-    batteryReadout.textContent = '—';
-    batteryCaption.textContent = 'Reading battery service…';
-  }
+.controls-panel{ grid-column: 1 / -1; }
 
-  function setBatteryLevel(percent) {
-    const clamped = Math.max(0, Math.min(100, percent));
-    const offset = RING_CIRCUMFERENCE * (1 - clamped / 100);
-    ringFill.style.strokeDashoffset = String(offset);
-    ringFill.style.stroke = clamped <= 15 ? 'var(--danger)' : 'var(--amber)';
-    batteryReadout.textContent = `${clamped}%`;
-    batteryCaption.textContent = 'Live from the device\u2019s battery characteristic.';
-  }
+.control-row{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.control-row:last-of-type{ border-bottom: none; }
 
-  async function wireBatteryService(server) {
-    try {
-      const service = await server.getPrimaryService('battery_service');
-      const characteristic = await service.getCharacteristic('battery_level');
+.control-title{ font-size: 13.5px; font-weight: 500; }
+.control-caption{ font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
 
-      const value = await characteristic.readValue();
-      setBatteryLevel(value.getUint8(0));
-      log(`Battery level read: ${value.getUint8(0)}%`, 'ok');
+.control-btn{
+  padding: 8px 18px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color .15s, transform .15s, opacity .15s;
+  flex-shrink: 0;
+}
+.control-btn:hover:not(:disabled){ border-color: var(--amber-dim); }
+.control-btn:active:not(:disabled){ transform: scale(0.96); }
+.control-btn:disabled{ opacity: .4; cursor: not-allowed; }
 
-      characteristic.addEventListener('characteristicvaluechanged', (event) => {
-        const level = event.target.value.getUint8(0);
-        setBatteryLevel(level);
-        log(`Battery update: ${level}%`);
-      });
+.switch{
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.switch input{
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+.switch-track{
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  transition: background .2s, border-color .2s;
+}
+.switch-thumb{
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  transition: transform .2s var(--ease), background .2s;
+}
+.switch input:checked + .switch-track{
+  background: var(--cyan-dim);
+  border-color: var(--cyan);
+}
+.switch input:checked + .switch-track .switch-thumb{
+  transform: translateX(18px);
+  background: var(--cyan);
+}
+.switch input:disabled + .switch-track{ opacity: .4; cursor: not-allowed; }
+.switch input:focus-visible + .switch-track{ outline: 2px solid var(--amber); outline-offset: 2px; }
 
-      try {
-        await characteristic.startNotifications();
-        log('Subscribed to live battery updates.', 'ok');
-      } catch {
-        log('Battery characteristic found, but live updates aren\u2019t supported — showing last read value.', 'warn');
-      }
-    } catch (err) {
-      batteryCaption.textContent = 'Battery service was listed but couldn\u2019t be read.';
-      log(`Battery read failed: ${err.message}`, 'warn');
-    }
-  }
+.controls-note{
+  margin: 14px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-tertiary);
+}
 
-  /* =========================================================
-     Device information service — only render fields that exist
-     ========================================================= */
-  async function wireDeviceInfoService(server) {
-    let service;
-    try {
-      service = await server.getPrimaryService('device_information');
-    } catch (err) {
-      infoList.innerHTML = '<div class="info-empty">Device Information service was listed but couldn\u2019t be opened.</div>';
-      log(`Device info service failed: ${err.message}`, 'warn');
-      return;
-    }
+/* =========================================================
+   Log panel
+   ========================================================= */
+.log-panel{
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  max-height: 620px;
+  overflow: hidden;
+}
+.log-header{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-soft);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+}
+.log-clear{
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.log-clear:hover{ color: var(--text-secondary); }
 
-    const decoder = new TextDecoder('utf-8');
-    let foundAny = false;
+.log-body{
+  padding: 12px 14px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.log-line{
+  color: var(--text-secondary);
+  animation: fadeIn .25s ease both;
+}
+.log-line .t{ color: var(--text-tertiary); margin-right: 6px; }
+.log-line[data-kind="ok"]{ color: var(--cyan); }
+.log-line[data-kind="warn"]{ color: var(--amber); }
+.log-line[data-kind="error"]{ color: var(--danger); }
 
-    for (const field of DEVICE_INFO_FIELDS) {
-      try {
-        const characteristic = await service.getCharacteristic(field.name);
-        const value = await characteristic.readValue();
-        const text = decoder.decode(value).replace(/\0/g, '').trim();
-        if (text) {
-          appendInfoRow(field.label, text);
-          foundAny = true;
-        }
-      } catch {
-        // This characteristic isn't implemented on this device — skip silently,
-        // it's normal for most devices to expose only a subset.
-      }
-    }
+@keyframes fadeIn{ from{ opacity: 0; transform: translateY(2px); } to{ opacity: 1; transform: translateY(0); } }
 
-    if (foundAny) {
-      log('Device identification strings loaded.', 'ok');
-    } else {
-      infoList.innerHTML = '<div class="info-empty">Service present, but no readable identification strings were returned.</div>';
-      log('Device Information service had no readable fields.', 'warn');
-    }
-  }
-
-  function appendInfoRow(label, value) {
-    const row = document.createElement('div');
-    row.className = 'info-row';
-    row.innerHTML = `<dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd>`;
-    infoList.appendChild(row);
-  }
-
-  /* =========================================================
-     Disconnection — return to hero, real state, no lingering data
-     ========================================================= */
-  function handleDisconnected() {
-    log('Device disconnected.', 'warn');
-    setStatus('ready', 'Ready to pair');
-    setCaseState('idle');
-    connectBtn.disabled = false;
-    dashboardView.hidden = true;
-    heroView.hidden = false;
-    currentDevice = null;
-    findAlertChar = null;
-    linkLossChar = null;
-  }
-
-  checkEnvironment();
-})();
+/* =========================================================
+   Footnote
+   ========================================================= */
+.footnote{
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  padding-top: 28px;
+}
